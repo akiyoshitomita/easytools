@@ -10,7 +10,9 @@
 |CPU looper| CPU使用率を上げるためのスクリプト 主に負荷テスト用 |
 
 # ライセンス
+
 MITライセンス
 
 #　作成者
-A.Tomita
+
+Akiyoshi Tomita
