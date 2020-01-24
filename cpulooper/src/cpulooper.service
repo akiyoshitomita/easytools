@@ -1,0 +1,11 @@
+[Unit]
+Description=CPU Looper
+
+[Service]
+ExecStart=/usr/loca/sbin/cpulooper_run.sh
+ExecStop=/bin/kill ${MAINPID}
+Restart=always
+Type=simple
+
+[Install]
+WantedBy=multi-user.target
