@@ -13,6 +13,6 @@
 
 MITライセンス
 
-#　作成者
+# 作成者
 
 Akiyoshi Tomita
