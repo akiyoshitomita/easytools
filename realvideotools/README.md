@@ -14,3 +14,9 @@ $ sudo apt install gcc libiconv-hook-dev
 $ make
 ````
 
+# rmenc 利用手順
+
+````
+$ ./rmenc [SJISタイトルの.rmファイル] [出力.rmファイル]
+````
+
