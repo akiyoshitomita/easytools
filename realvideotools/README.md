@@ -6,3 +6,11 @@
 
 # セットアップ方法
 
+gcc と libiconvのインストール
+make を実行
+
+````
+$ sudo apt install gcc libiconv-hook-dev
+$ make
+````
+
