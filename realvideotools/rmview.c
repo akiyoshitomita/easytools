@@ -23,7 +23,7 @@
 #include <string.h>
 #include <iconv.h>
 
-#define BUFSIZE 1024
+#define BUFSIZE 2048
 #define ERR001  "{\"file\":\"%s\",\"state\":\"error\",\"msg\":\"%s\"}\n"
 #define SUCCESS "{\"file\":\"%s\",\"state\":\"success\",\"data\":{%s},\"msg\":\"%s\"}\n"
 
@@ -76,16 +76,11 @@ int main(int argc, char *argv[]){
   char        *obuf;    // 出力側バッファ先頭ポインタ
   char        *p1;	// 入力側可変ポインタ
   char        *p2;      // 出力側可変ポインタ
-  char        *p3;      // 一時利用可変ポインタ
+  char        *p3,*p4;  // 一時利用可変ポインタ
   size_t      p1len;    // 入力バッファサイズ
   size_t      p2len;    // 出力バッファの残りサイズ
 
-  int         i, tmp, len;	// 一時利用
-
-
-  // 廃止予定
-  //int         flgSjis, flgCopy, flgUnkw, flgCont; // 各フラグ
-  char        *ptmp;
+  int         i, tmp, len, len2, x;	// 一時利用
 
   ibuf  = (char *)malloc(BUFSIZE);
   obuf = (char *)malloc(BUFSIZE);
@@ -95,11 +90,6 @@ int main(int argc, char *argv[]){
   p2len = BUFSIZE;
   flg   = 0;
   flgCont = 0;
-
-  // 文字コードのパターン確認 （削除予定) 
-//  flgSjis = 0;
-//  flgCopy = 0;
-//  flgUnkw = 0;
 
   // オプションを入力していない場合はエラーとする
   if(argc != 2){ 
@@ -178,6 +168,97 @@ int main(int argc, char *argv[]){
      
     //} else  {  // 次のエリアまでコピー
     // MDPRで logical-fileinfoの場合の処理
+    } else if(memcmp(phead.type, "MDPR", 4) == 0){
+      // ファイルポインタを戻す
+      if(fseek(fr, 0- sizeof(phead), SEEK_CUR)) { return 12; }
+
+      len = bswap_32(phead.size);  
+      if(fread(ibuf, len, 1, fr) != 1){   
+        fprintf(stderr, "READ FILE ERROR\n");
+        return 12; 
+      }
+	    
+      p1  = ibuf; // 可変ポインタ 
+      // プロパティヘッダ分の移動
+      p1 += sizeof(phead);
+      // バージョンの判断
+      ver = bswap_16(*(short *)p1);
+      p1 += sizeof(short);
+      if( ver != 0){
+        fprintf(stderr, "ERROR: MDPR VERSION\n");
+	return 20;
+      } 
+      // ポインタスキップ stream number, Maximum bit rate, Avarage bit rate,
+      //                  size of largest data packet, average size, start,
+      //                  Preroll, Stream duration
+      p1 += sizeof(short) + sizeof(int) + sizeof(int) + 
+	      sizeof(int) + sizeof(int) + sizeof(int) +
+	      sizeof(int) + sizeof(int);
+      // デスクリプション部分のスキップ 
+      p1 += sizeof(char) + *p1;
+      // logical-fileinfoの処理
+      if(memcmp( p1+1, "logical-fileinfo", *p1) == 0){
+        p1 += sizeof(char) + *p1;
+	tmp = bswap_32(*(int *)p1);
+	p1 += sizeof(int);
+        if(len < (p1 - ibuf) + tmp){
+          printf(ERR001, argv[1] , "logical-fileinfo error#1");
+          return 12;
+	}
+	// logical-fileinfoの長さへ変更
+	len = tmp;
+	tmp = bswap_32(*(int *)p1);
+	p1 += sizeof(int);
+        if(len != tmp){
+          printf(ERR001, argv[1] , "logical-fileinfo unknown#1");
+          return 12;
+	}	
+	// logical-fileinfoの不明なフィールド 4バイト
+	tmp = bswap_32(*(int *)p1);
+	p1 += sizeof(int);
+        if(tmp != 0){
+          printf(ERR001, argv[1] , "logical-fileinfo unknown#2");
+          return 12;
+	}	
+        // オプションフィールドの個数を取得
+        x = bswap_32(*(int *)p1);
+        p1 += sizeof(int);
+        for(i = 0; i < x ; i++){
+	  // 長さ
+	  p3   = p1;
+          len2 = bswap_32(*(int *)p3);
+	  p1 += len2;
+	  p3 += sizeof(int);
+	  // Ver
+	  if(*p3 != 0 ) {
+            printf(ERR001, argv[1] , "logical-fileinfo unknown#3");
+            return 12;
+	  } 
+	  p3++;
+           
+          tmp = bswap_16(*(short *)p3); // key長さ
+	  p3 += sizeof(short);
+	  p4 = p3 + tmp;
+	  if(bswap_32(*(int *)p4) == 0){}
+	  else {
+  	    *p2 = '"'; p2++;
+    	    memcpy(p2, p3, tmp);
+            p2 += tmp;
+	    p3 += tmp;
+	    *p2 = '"'; p2++;
+	    *p2 = ':'; p2++;
+            p3+= sizeof(int); // 不明なフィールド 常に0x02の場合のみ表示
+            tmp = bswap_16(*(short *)p3); // value 長さ
+	    p3 += sizeof(short);
+	  
+	    *p2 = '"'; p2++;
+            flg |= AutoEnc(ic,&p3, &tmp, &p2, &p2len);
+	    *p2 = '"'; p2++;
+	    *p2 = ','; p2++;
+          }
+
+	}	
+      }  
     } else {  // 次のエリアまでコピー
       // ファイルポインタを戻す
       if(fseek(fr, 0- sizeof(phead), SEEK_CUR)) { return 12; }
@@ -231,7 +312,8 @@ int AutoEnc(iconv_t cd, char **inbuf, int *inlen, char **outbuf, int *outlen)
   // 文字コードの判断 * SJISの場合はiconvに任せる
   p1 = ibuf;
   for(i = 0; i < *inlen; i++){
-    if      (*p1 == 0x00)    { res |= FLG_0PAD; } // NULLパディング
+    if      (*p1 == 0x00)    { //if((res |= FLG_0PAD) == 0) *inlen = i;   
+	                       res |= FLG_0PAD;}  // NULLパディング 
     else if (res & FLG_0PAD) { res |= FLG_UNKW; } // NULLパディングエラー
     else if (*p1 <  0x20)    { res |= FLG_UNKW; } // 制御文字エラー    
     else if (*p1 <  0x7f)    {}                   // ASCII文字
@@ -244,18 +326,26 @@ int AutoEnc(iconv_t cd, char **inbuf, int *inlen, char **outbuf, int *outlen)
   }
 
   // 変換不可能な場合は何もしない
-  if(res&FLG_UNKW){ return res; }
+  if(res&FLG_UNKW){ printf("%d:%s\n", *inlen,*inbuf); return res; }
   // SJISの場合
   if(res&FLG_SJIS){
+    //NULLの確認
+    i=0; p1 = ibuf;
+    while(*p1!=0){i++; p1++;}
+    *inlen = i;
+
     i = iconv(cd, inbuf, inlen, outbuf, outlen);
     if(i < 0) { res != FLG_UNKW; }
     return res;
   }
-  if(res&FLG_COPY || 0 == res || FLG_0PAD == res){
+  if(res&FLG_COPY || 0 == res || res&FLG_0PAD){
     while(*inlen){
       if(**inbuf == 0x00) break; 
       if(**inbuf == 0xa9){ **outbuf = 0xc2; *outbuf = *outbuf + 1; *outlen--; }
-      **outbuf = **inbuf; *outbuf=*outbuf+1;*inbuf=*inbuf+1;*inlen--; *outlen--;
+      if(**inbuf == '"'){ **outbuf = '\\'; *outbuf = *outbuf + 1; *outlen--; }
+      if(**inbuf == '\\'){ **outbuf = '\\'; *outbuf = *outbuf + 1; *outlen--; }
+      **outbuf = **inbuf; *outbuf=*outbuf+1;*inbuf=*inbuf+1;
+         *inlen = *inlen - 1; *outlen = *outlen -1;
     }
     return res;
   }
@@ -268,5 +358,5 @@ void view_help(){
   fprintf(stderr, "rmview の使い方\n");
   fprintf(stderr, "rmview [入力ファイル名] \n");
   fprintf(stderr, "\n");
-  fprintf(stderr, " 出力は ファイル名,変換方式,タイトル,作成者,著作権,コメント,プログラム内メッセージ \n");
+  fprintf(stderr, " 出力は JSON形式 \n");
 }

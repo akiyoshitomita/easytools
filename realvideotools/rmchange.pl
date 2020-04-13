@@ -2,6 +2,7 @@
 
 use JSON;
 
+
 my @filelist = (map{ $_ =~ tr/\n\r//d; $_ } `find . -name '*.rm'`,
 	    map{ $_ =~ tr/\n\r//d; $_ } `find . -name '*.ram'`);
 
@@ -15,7 +16,6 @@ foreach my $file_rm (@filelist){
   $file_mp4_e =~ s/\.rm$/\.mp4/;
   $file_mp4_e =~ s/\.ram$/\.mp4/;
   next if(-f $file_mp4);
-
   # SJISのタイトル取得
   my $idata 
        = `./rmview ${file_rm_e} | tee -a rmview.log`;
@@ -23,10 +23,9 @@ foreach my $file_rm (@filelist){
   $message =~ s/\n$//;
   # 取得エラーがある場合は終了
   if($data->{state} ne 'success'){
-    printf("%s : ERROR (rmview)\n", $file);
+    printf("%s : ERROR (rmview)\n", $file_rm);
     next;
   }
-
   # mplayerでストリームダンプ
   my $out = `mplayer -dumpstream ${file_rm_e} -really-quiet`;
   # ストリームダンプからmp4を作成
@@ -42,6 +41,8 @@ foreach my $file_rm (@filelist){
     $opt .= " --title '$d->{title}'" if $d->{title};
     $opt .= " --comment '$d->{comment}'" if $d->{comment};
     $opt .= " --copyright '$d->{copyright}'" if $d->{copyright};
+    $opt .= " --keyword '$d->{Keywords}'" if $d->{Keywords};
+    $opt .= " --description '$d->{Description}'" if $d->{Description};
     $out .= `AtomicParsley ${file_mp4_e} ${opt}` if $opt; 
     # xxx-temp-xxxx.mp4 ファイルができるので古いファイルの削除して名前変更
     `rm ${file_mp4_e}`;
@@ -49,7 +50,7 @@ foreach my $file_rm (@filelist){
     $file_mp4_temp    =~ s/\.mp4$/-temp-*.mp4/;
     `mv ${file_mp4_temp} ${file_mp4_e}`;
   }
-  printf("%s : converted to mp4 \n", $file);
+  printf("%s : converted to mp4 \n", $file_rm);
   printf($out);
 
 }
