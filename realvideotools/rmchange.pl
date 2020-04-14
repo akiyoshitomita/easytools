@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 use JSON;
-
+use Encode;
 
 my @filelist = (map{ $_ =~ tr/\n\r//d; $_ } `find . -name '*.rm'`,
 	    map{ $_ =~ tr/\n\r//d; $_ } `find . -name '*.ram'`);
@@ -43,6 +43,7 @@ foreach my $file_rm (@filelist){
     $opt .= " --copyright '$d->{copyright}'" if $d->{copyright};
     $opt .= " --keyword '$d->{Keywords}'" if $d->{Keywords};
     $opt .= " --description '$d->{Description}'" if $d->{Description};
+    $opt = encode('UTF-8',$opt);
     $out .= `AtomicParsley ${file_mp4_e} ${opt}` if $opt; 
     # xxx-temp-xxxx.mp4 ファイルができるので古いファイルの削除して名前変更
     `rm ${file_mp4_e}`;
