@@ -3,8 +3,8 @@
 use JSON;
 use Encode;
 
-my @filelist = (map{ $_ =~ tr/\n\r//d; $_ } `find . -name '*.rm'`,
-	    map{ $_ =~ tr/\n\r//d; $_ } `find . -name '*.ram'`);
+my @filelist = (map{ $_ =~ tr/\n\r//d; $_ } `find . -name '*.rm' -type f`,
+	    map{ $_ =~ tr/\n\r//d; $_ } `find . -name '*.ram' -type f`);
 
 foreach my $file_rm (@filelist){
   my $file_mp4   = $file_rm;

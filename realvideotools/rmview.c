@@ -326,7 +326,8 @@ int AutoEnc(iconv_t cd, char **inbuf, int *inlen, char **outbuf, int *outlen)
   }
 
   // 変換不可能な場合は何もしない
-  if(res&FLG_UNKW){ printf("%d:%s\n", *inlen,*inbuf); return res; }
+  //if(res&FLG_UNKW){ printf("%d:%s\n", *inlen,*inbuf); return res; }
+  if(res&FLG_UNKW){ return res; }
   // SJISの場合
   if(res&FLG_SJIS){
     //NULLの確認
